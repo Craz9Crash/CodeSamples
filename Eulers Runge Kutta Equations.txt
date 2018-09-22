@@ -1,0 +1,143 @@
+#include <math.h>
+#include <iostream>
+#include <fstream>
+using namespace std;
+
+const int nmax = 300; //number of steps/ 30 seconds
+const float h = 0.1; //time step size
+
+//Cuboid Data
+const float a = 1.0;
+const float b = 2.0;
+const float c = 3.0;
+const float mass = 10.0;
+
+float I1;
+float I2;
+float I3;
+
+float kx1, ky1, kz1;
+float kx2, ky2, kz2;
+float kx3, ky3, kz3;
+float kx4, ky4, kz4;
+
+float gamma1;
+float gamma2;
+float gamma3;
+
+ofstream file;
+ofstream file1;
+
+void TranslationalMotion(float omegaX, float omegaY, float omegaZ, int n);
+
+void main()
+{
+
+	//rotational Data
+	file.open("Data.txt");
+	file1.open("Traj.txt");
+
+	float x[nmax];
+	float y[nmax];
+	float z[nmax];
+
+	//I1, I2, I3 based on inertial Tensor
+	I1 = (1.0 / 3.0 * mass) * (pow(b, 2.0) + pow(c, 2.0));
+	I2 = (1.0 / 3.0 * mass) * (pow(a, 2.0) + pow(c, 2.0));
+	I3 = (1.0 / 3.0 * mass) * (pow(a, 2.0) + pow(b, 2.0));
+
+	gamma1 = -((I3 - I2) / I1);
+	gamma2 = -((I1 - I3) / I2);
+	gamma3 = -((I2 - I1) / I3);
+
+	//reset every value to zero
+	for (int i = 0; i > nmax; i++)
+	{
+		x[i] = 0.0;
+		y[i] = 0.0;
+		z[i] = 0.0;
+	}
+
+	//Set first value to 1
+	x[0] = 1.0;
+	y[0] = 1.0;
+	z[0] = 1.0;
+
+	//Runge-Kutta 4
+	for (int n = 0; n < nmax - 1; n++)
+	{
+		//1st Order
+		kx1 = h * gamma1 * y[n] * z[n];
+		ky1 = h * gamma2 * x[n] * z[n];
+		kz1 = h * gamma3 * x[n] * y[n];
+
+		//2nd Order
+		kx2 = h * (gamma1 * (y[n] + (ky1 / 2.0)) * (z[n] +  (kz1 / 2.0)));
+		ky2 = h * (gamma2 * (x[n] + (kx1 / 2.0)) * (z[n] + (kz1 / 2.0)));
+		kz2 = h * (gamma3 * (x[n] + (kx1 / 2.0)) * (y[n] + (ky1 / 2.0)));
+
+		//3rd Order
+		kx3 = h * (gamma1 * (y[n] + (ky2 / 2.0)) * (z[n] + (kz2 / 2.0)));
+		ky3 = h * (gamma2 * (x[n] + (kx2 / 2.0)) * (z[n] + (kz2 / 2.0)));
+		kz3 = h * (gamma3 * (x[n] + (kx2 / 2.0)) * (y[n] + (ky2 / 2.0)));
+
+		//4th Order
+		kx4 = h * (gamma1 * (y[n] + ky3) * (z[n] + kz3));
+		ky4 = h * (gamma2 * (x[n] + kx3) * (z[n] + kz3));
+		kz4 = h * (gamma3 * (x[n] + kx3) * (y[n] + ky3));
+		
+		x[n + 1] = (x[n] + (kx1 / 6.0) + (kx2 / 3.0) + (kx3 / 3.0) + (kx4 / 6.0));
+		y[n + 1] = (y[n] + (ky1 / 6.0) + (ky2 / 3.0) + (ky3 / 3.0) + (ky4 / 6.0));
+		z[n + 1] = (z[n] + (kz1 / 6.0) + (kz2 / 3.0) + (kz3 / 3.0) + (kz4 / 6.0));
+
+		TranslationalMotion(x[n], y[n], z[n], n);
+
+		//Print to file
+		file << x[n] << "," << y[n] << "," << z[n] << "," << h * n <<  endl;
+
+	}
+	file.close();
+	file1.close();
+	cin.get();
+	return;
+}
+
+void TranslationalMotion(float omegaX, float omegaY, float omegaZ, int n)
+{
+	//init conditions
+	float position[3] = { a / 2, b / 2, c / 2 };
+	float magnitude = sqrt((pow(omegaX, 2) + pow(omegaY, 2) + pow(omegaZ, 2)));
+	float theta = magnitude * (h*n);
+	float alpha = omegaX / magnitude;
+	float beta = omegaY / magnitude;
+	float gamma = omegaZ / magnitude;
+	float rottranmatrix[3][3];
+	float nextposition[3];
+
+	//Standard rotation transformation matrix (3x3)
+	rottranmatrix[0][0] = (pow(alpha, 2) * (1 - cos(theta)) + cos(theta));
+	rottranmatrix[0][1] = ((alpha * beta) * (1 - cos(theta)) - (gamma*sin(theta)));
+	rottranmatrix[0][2] = ((alpha * gamma) * (1 - cos(theta)) + (beta * sin(theta)));
+
+	rottranmatrix[1][0] = ((alpha * beta) * (1 - cos(theta)) + (gamma * sin(theta)));
+	rottranmatrix[1][1] = (pow(beta, 2) * (1 - cos(theta)) + cos(theta));
+	rottranmatrix[1][2] = ((beta * gamma) * (1 - cos(theta)) - (alpha *sin(theta)));
+
+	rottranmatrix[2][0] = ((alpha * gamma) * (1 - cos(theta)) - (beta * sin(theta)));
+	rottranmatrix[2][1] = ((beta * gamma) * (1 - cos(theta)) + (alpha * sin(theta)));
+	rottranmatrix[2][2] = (pow(gamma, 2) * (1 - cos(theta)) + cos(theta));
+
+	//Matrix multiplication
+	nextposition[0] = (rottranmatrix[0][0] * position[0]) + (rottranmatrix[0][1] * position[1]) + (rottranmatrix[0][2] * position[2]);
+	nextposition[1] = (rottranmatrix[1][0] * position[0]) + (rottranmatrix[1][1] * position[1]) + (rottranmatrix[1][2] * position[2]);
+	nextposition[2] = (rottranmatrix[2][0] * position[0]) + (rottranmatrix[2][1] * position[1]) + (rottranmatrix[2][2] * position[2]);
+
+	//Since velocity is 1,1,1, the centre of mass position will be the same as time
+	nextposition[0] = nextposition[0] + (h*n);
+	nextposition[1] = nextposition[1] + (h*n);
+	nextposition[2] = nextposition[2] + (h*n);
+
+	//save data to file
+	file1 << nextposition[0] << "," << nextposition[1] << "," << nextposition[2] << "," << h * n << endl;
+
+}

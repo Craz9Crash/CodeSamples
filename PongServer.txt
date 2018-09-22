@@ -1,0 +1,264 @@
+#include <stdio.h>
+#include <iostream>
+#include <stdlib.h>
+#include <string.h>
+#include <winsock2.h>
+#include <list>
+
+#pragma comment(lib, "ws2_32.lib")
+
+
+// The IP address for the server
+#define SERVERIP "127.0.0.1"
+
+// The UDP port number for the server
+#define SERVERPORT 4444
+
+using namespace std;
+int NumOfPlayers = 0;
+float timer = 10;
+//Array of addresses
+sockaddr_in addresses[4];
+
+// Prototypes
+void die(const char *message);
+
+//These are the types of messages that are sent between the client and server
+enum messagetype
+{
+	MSG_REQUEST = 0,
+	MSG_REPLY = 1,
+	MSG_POS_UPDATE = 2,
+	MSG_POS_REPLY = 3,
+	MSG_WAITING = 4
+};
+
+//message which contains the postition and direction data
+struct message
+{
+	messagetype type;
+	int playerno;
+	float x, y;
+	float ballx, bally;
+	float bdirx, bdiry;
+};
+
+//First message sent from client 
+struct requestmsg
+{
+	messagetype type;
+};
+
+//message sent back to the client with thier player number
+struct replymsg
+{
+	messagetype type;
+	int playerno;
+};
+
+struct player
+{
+	int playerno;
+	float x, y;
+};
+
+//Message sent to all clients with the positions of all players and ball
+struct posupdatemsg
+{
+	messagetype type;
+	float p1y, p2y;
+	float p3x, p4x;
+	float bx, by;
+	float bdirx, bdiry;
+};
+
+int main()
+{
+	printf("Pong Server\n");
+
+	// Initialise the WinSock library -- we want version 2.2.
+	WSADATA w;
+	int error = WSAStartup(0x0202, &w);
+	if (error != 0)
+	{
+		die("WSAStartup failed");
+	}
+	if (w.wVersion != 0x0202)
+	{
+		die("Wrong WinSock version");
+	}
+
+	// Create a UDP socket.
+	SOCKET sock = socket(AF_INET, SOCK_DGRAM, 0);
+	if (sock == INVALID_SOCKET)
+	{
+		die("socket failed");
+	}
+
+	sockaddr_in serverAddr;
+	serverAddr.sin_family = AF_INET;
+	serverAddr.sin_addr.s_addr = inet_addr(SERVERIP);
+	// htons converts the port number to network byte order (big-endian).
+	serverAddr.sin_port = htons(SERVERPORT);
+
+	// Bind the socket to that address.
+	if (bind(sock, (const sockaddr *)&serverAddr, sizeof(serverAddr)) != 0)
+	{
+		die("bind failed");
+	}
+
+	// ntohs does the opposite of htons.
+	printf("Server socket bound to address %s, port %d\n", inet_ntoa(serverAddr.sin_addr), ntohs(serverAddr.sin_port));
+
+	while (true)
+	{
+		message msg;
+		posupdatemsg clientupdate;
+		sockaddr_in fromAddr;
+		messagetype request;
+
+		//set up message buffers
+		char typeBuffer[sizeof(messagetype)];
+		char messageBuffer[sizeof(message)];
+		int fromAddrSize = sizeof(fromAddr);
+
+		printf("Waiting for a message...\n");
+	
+		//wait for 4 clients to connect
+		while (NumOfPlayers <= 3)
+		{
+			printf("Waiting for 4 players");
+
+			//Listen for request messages
+			int count = recvfrom(sock, typeBuffer, sizeof(messagetype), 0,
+				(sockaddr *)&fromAddr, &fromAddrSize);
+
+			memcpy(&request, typeBuffer, sizeof(messagetype));
+
+			//if the message type is the request message, then assign a number and send back to client
+			if (request != MSG_REQUEST)
+			{
+				continue;
+			}
+			else if (NumOfPlayers <= 3)
+			{
+				std::cout << "player connected! player number " << NumOfPlayers << endl;
+				replymsg reply;
+				//set message type
+				reply.type = MSG_REPLY;
+				reply.playerno = NumOfPlayers;
+
+				//Add address to array
+				addresses[NumOfPlayers] = fromAddr;
+				NumOfPlayers++;
+
+				//Send the player number back to the client
+				if (sendto(sock, (char *)&reply, sizeof(replymsg), 0,
+					(const sockaddr *)&fromAddr, sizeof(fromAddr)) != sizeof(reply))
+				{
+					die("sendto failed");
+				}
+			}
+
+			replymsg waiting;
+			waiting.type = MSG_WAITING;
+			waiting.playerno = NumOfPlayers;
+
+
+			//while the server is waiting for clients to connect, send already connected clients updates of how 
+			//many players are currently connected
+			for (int i = 0; i < NumOfPlayers; i++)
+			{
+				if (sendto(sock, (char *)&waiting, sizeof(replymsg), 0,
+					(const sockaddr *)&addresses[i], sizeof(fromAddr)) != sizeof(waiting))
+				{
+					die("sendto failed");
+				}
+			}
+		}
+
+		//once game has started, listen for position update messages
+		int poscount = recvfrom(sock, messageBuffer, sizeof(message), 0,
+			(sockaddr *)&fromAddr, &fromAddrSize);
+
+		memcpy(&msg, messageBuffer, sizeof(message));
+
+		cout << msg.playerno << " " << msg.x << " " << msg.y << endl;
+
+		if (msg.type != MSG_POS_UPDATE)
+		{
+			continue;
+		}
+		else
+		{
+			//Depending on which player the message has come from, update the positions for that player
+			if (msg.playerno == 0)
+			{
+				clientupdate.p1y = msg.y;
+				clientupdate.bx = msg.ballx;
+				clientupdate.by = msg.bally;
+				clientupdate.bdirx = msg.bdirx;
+				clientupdate.bdiry = msg.bdiry;
+			}
+
+			if (msg.playerno == 1)
+			{
+				clientupdate.p2y = msg.y;
+			}
+
+			if (msg.playerno == 2)
+			{
+				clientupdate.p3x = msg.x;
+			}
+
+			if (msg.playerno == 3)
+			{
+				clientupdate.p4x = msg.x;
+			}
+
+			cout << clientupdate.p1y << endl;
+		}
+
+
+
+if (timer <= 0)
+		{
+		for (int i = 0; i < NumOfPlayers; i++)
+		{
+			//Send all of the clients an update of all of the players and ball positions
+			clientupdate.type = MSG_POS_REPLY;
+			if (sendto(sock, (char *)&clientupdate, sizeof(posupdatemsg), 0,
+				(const sockaddr *)&addresses[i], sizeof(fromAddr)) != sizeof(posupdatemsg))
+			{
+				die("sendto failed");
+			}
+		}
+			timer = 10;
+		}
+		else
+		{
+			timer--;
+		}
+		
+	}
+
+	//Clean up
+	printf("Quitting\n");
+	closesocket(sock);
+	WSACleanup();
+	return 0;
+}
+
+
+// Print an error message and exit.
+void die(const char *message)
+{
+	fprintf(stderr, "Error: %s (WSAGetLastError() = %d)\n", message, WSAGetLastError());
+
+#ifdef _DEBUG
+	// Debug build -- drop the program into the debugger.
+	abort();
+#else
+	exit(1);
+#endif
+}

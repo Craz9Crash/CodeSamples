@@ -1,0 +1,214 @@
+#define _CRT_SECURE_NO_WARNINGS 1
+
+#include "Networking.h"
+#include "Scene.h"
+
+#pragma comment(lib, "ws2_32.lib")
+
+
+
+//sets up the socket and port being used 
+int Networking::net_init()
+{
+	sock = socket(AF_INET, SOCK_DGRAM, 0);
+	if (sock == INVALID_SOCKET)
+	{
+		die("socket failed");
+	}
+
+	toAddr.sin_family = AF_INET;
+	toAddr.sin_port = htons(SERVERPORT);
+	toAddr.sin_addr.s_addr = inet_addr(HOMEIP);
+
+
+	return 0;
+}
+
+
+int Networking::networking(Players& Player1, Players& Player2, Players& Player3, Players& Player4, Players& Ball, SOCKET sock, int client)
+{
+	//Set up position update message to be sent to the server based off of the client number
+		message msg;
+		msg.type = MSG_POS_UPDATE;
+		msg.playerno = client;
+
+		//Player one will set up the ball initally
+		if (client == 0)
+		{
+			msg.x = Player1.x;
+			msg.y = Player1.y;
+			msg.ballx = Ball.x;
+			msg.bally = Ball.y;
+			msg.bdirx = Ball.dirx;
+			msg.bdiry = Ball.diry;
+		}
+		else if (client == 1)
+		{
+			msg.x = Player2.x;
+			msg.y = Player2.y;
+		}
+		else if (client == 2)
+		{
+			msg.x = Player3.x;
+			msg.y = Player4.y;
+		}
+		else if (client == 3)
+		{
+			msg.x = Player4.x;
+			msg.y = Player4.y;
+		}
+
+		//send message to server
+		int	ct;
+		ct = sendto(sock, (char *)&msg, sizeof(message), 0,
+			(const sockaddr *)&toAddr, sizeof(toAddr));
+
+		return 0;
+}
+
+//clean up for network
+void Networking::cleanup(SOCKET sock)
+{
+	closesocket(sock);
+	WSACleanup();
+}
+
+
+int Networking::request()
+{
+	//Set up the first message to be sent to the client
+	requestmsg firstmsg;
+	firstmsg.type = MSG_REQUEST;
+	int assignedno = 5;
+	int connectedPlayers = 0;
+	int	ct;
+	
+
+	//Constantly send messages while the assigned number is not correct
+	while (assignedno == 5)
+	{
+		//Send request message to server
+		ct = sendto(sock, (char *)&firstmsg, sizeof(requestmsg), 0,
+			(const sockaddr *)&toAddr, sizeof(toAddr));
+
+		//wait for message back from server with the client number
+		replymsg msgbck;
+		int fromAddrSize = sizeof(fromAddr);
+		int count = recvfrom(sock, (char *)&msgbck, sizeof(replymsg), 0,
+			(sockaddr *)&fromAddr, &fromAddrSize);
+
+		//Print number recieved from server to output window
+		//odprintf("Playerno.%i ", msgbck.playerno);
+
+		assignedno = msgbck.playerno;
+	}
+
+	//recieve updates from server about how many players are connected to the server and start the game
+	//once 4 players have connect
+	while (connectedPlayers <= 3)
+	{
+		replymsg waiting;
+		int fromAddrSize = sizeof(fromAddr);
+		int wcount = recvfrom(sock, (char *)&waiting, sizeof(replymsg), 0,
+			(sockaddr *)&fromAddr, &fromAddrSize);
+
+		connectedPlayers = waiting.playerno;
+	}
+
+
+	//Set socket to non-blocking mode
+	u_long value = 1;
+	ioctlsocket(sock, FIONBIO, &value);
+		return assignedno;
+}
+
+int Networking::positionupdating(Players& Player1, Players& Player2, Players& Player3, Players& Player4, Players& Ball, int client)
+{
+		posupdatemsg update;
+		
+		//Listen for messages from the server
+		int fromAddrSize = sizeof(fromAddr);
+		int poscount = recvfrom(sock, (char *)&update, sizeof(posupdatemsg), 0,
+			(sockaddr *)&fromAddr, &fromAddrSize);
+
+		if (poscount == -1)
+		{
+			if (WSAGetLastError() == WSAEWOULDBLOCK)
+			{
+				// it would have blocked
+			}
+			else
+			{
+				// some other error has occurred
+			}
+		}
+		else
+		{
+			// it worked!
+			if (update.type != MSG_POS_REPLY)
+			{
+
+			}
+			else
+			{
+				//odprintf("Player1 Y.%f Player2 Y.%f Player3 X.%f Player4 X.%f", update.p1y, update.p2y, update.p3x, update.p4x);
+
+				//Depending on which client number the player is, update all of the other players and the ball 
+				if (client == 0)
+				{
+					Player2.y = update.p2y;
+					Player3.x = update.p3x;
+					Player4.x = update.p4x;
+				}
+				else if (client == 1)
+				{
+					Player1.y = update.p1y;
+					Player3.x = update.p3x;
+					Player4.x = update.p4x;
+				}
+				else if (client == 2)
+				{
+					Player1.y = update.p1y;
+					Player2.y = update.p2y;
+					Player4.x = update.p4x;
+				}
+				else if (client == 3)
+				{
+					Player1.y = update.p1y;
+					Player2.y = update.p2y;
+					Player3.x = update.p3x;
+				}
+			}
+
+			//If the ball is not in the same position as what the server is saying
+			//then update the ball position and direction
+			if (client != 0)
+			{
+				if (Ball.dirx != update.bdirx || Ball.diry != update.bdiry)
+				{
+					Ball.dirx = update.bdirx;
+					Ball.diry = update.bdiry;
+				}
+				if (Ball.x != update.bx && Ball.y != update.by)
+				{
+					Ball.x = update.bx;
+					Ball.y = update.by;
+				}
+			}
+
+		}
+	return 0;
+}
+
+
+void Networking::die(const char *message)
+{
+	fprintf(stderr, "Error: %s (WSAGetLastError() = %d)\n", message, WSAGetLastError());
+
+#ifdef _DEBUG
+	// Debug build -- drop the program into the debugger.
+	abort();
+#else
+	exit(1);
+#endif
+}

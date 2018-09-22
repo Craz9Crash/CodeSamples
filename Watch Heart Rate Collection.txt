@@ -1,0 +1,82 @@
+public class MainActivity extends WearableActivity implements SensorEventListener {
+
+    private static final String TAG = "MainActivity";
+    private TextView textView;
+    private SensorManager sensorManager;
+    private Sensor heartSensor;
+    private GoogleApiClient mGoogleApiClient;
+    private DataClient mDataClient;
+    public int HeartRate;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        textView = findViewById(R.id.text_view);
+
+        //Set sensor parameters
+        sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
+        heartSensor = sensorManager.getDefaultSensor(Sensor.TYPE_HEART_RATE);
+        sensorManager.registerListener(this, heartSensor, SensorManager.SENSOR_DELAY_FASTEST);
+        mDataClient = Wearable.getDataClient(this);
+        HeartRate = 71;
+
+        mGoogleApiClient = new GoogleApiClient.Builder(this)
+                .addApi(Wearable.API)
+                .build();
+        mGoogleApiClient.connect();
+
+        //Keeps watch on
+        setAmbientEnabled();
+        PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
+        PowerManager.WakeLock wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,
+                "MyWakelockTag");
+        wakeLock.acquire();
+
+    }
+
+    //If the sensor data changes then run
+    @Override
+    public void onSensorChanged(SensorEvent event) {
+        Log.d(TAG, "" + (int) event.values[0]);
+        float HeartRateFloat = event.values[0];
+        HeartRate = Math.round(HeartRateFloat);
+        //Update display on watch
+        textView.setText(Integer.toString(HeartRate));
+        //Send heart rate to phone
+        sendHeartRate(HeartRate);
+    }
+
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int accuracy) {
+        Log.d(TAG, "onAccuracyChanged - accuracy: " + accuracy);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        Log.d(TAG, "onResume: Running");
+        sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
+        heartSensor = sensorManager.getDefaultSensor(Sensor.TYPE_HEART_RATE);
+        sensorManager.registerListener(this, heartSensor, SensorManager.SENSOR_DELAY_FASTEST);
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        //stop the sensor
+        sensorManager.unregisterListener(this);
+    }
+
+    //Send data to phone
+    public void sendHeartRate(int heartRate)
+    {
+        PutDataMapRequest putDataMapRequest = PutDataMapRequest.create("/heart-rate");
+        putDataMapRequest.getDataMap().putInt("Heart-Rate", heartRate);
+
+        PutDataRequest request = putDataMapRequest.asPutDataRequest();
+        Task<DataItem> putDataTask = mDataClient.putDataItem(request);
+
+    }
+}

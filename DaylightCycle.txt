@@ -1,0 +1,40 @@
+using UnityEngine;
+using System.Collections;
+
+public class Cycle : MonoBehaviour
+{
+    public GameObject sunObject = null;
+    public bool rotateAroundZ = true;
+    public ParticleSystem flySystem;
+
+    void Start()
+    {
+        flySystem.GetComponent("Fireflies");
+        flySystem.Stop();
+    }
+
+    void Update()
+    {
+        //The sun light will rotate around the enviroment to give the impression of a day/night cycle
+        if (sunObject != null)
+        {
+            transform.LookAt(sunObject.transform);
+
+            if (rotateAroundZ)
+            {
+                    transform.RotateAround(sunObject.transform.position, new Vector3(0, 0, 1), Time.deltaTime * 10);
+            }
+        }
+
+        //if the sun is down, then spawn fireflies at night
+        if (transform.rotation.eulerAngles.x >= 180)
+        {
+            flySystem.Play();
+        }
+        else
+        {
+            flySystem.Stop();
+        }
+
+    }
+}

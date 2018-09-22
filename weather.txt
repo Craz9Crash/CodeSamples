@@ -1,0 +1,166 @@
+using UnityEngine;
+using System.Collections;
+
+public class Weather : MonoBehaviour
+{
+
+    public int weatherNumber;
+    public float weatherDuration;
+    public bool weatherCreate;
+    public ParticleSystem rainSystem;
+    public ParticleSystem snowSystem;
+
+    // Controls setting and changing the skybox
+    public GameObject skybox;
+    public Material RainySky;
+    public Material SunnySky;
+
+    //this takes data from our own test data script
+    public DataHandling data;
+
+    public float soilMoisture;
+    public float temp;
+
+    public GameObject water;
+    bool waterRising;
+
+
+
+    // Use this for initialization
+    void Start ()
+    {
+        data = GetComponent<DataHandling>();
+        temp = data.temp;
+        soilMoisture = data.soilMoisture;
+        weatherDuration = data.dataChange;
+        RenderSettings.skybox = SunnySky;   // Setting the skybox to be the OG colour
+        weatherNumber = 1;
+        weatherCreate = false;
+        rainSystem.GetComponent("Rain");
+        snowSystem.GetComponent("Snow");
+        waterRising = false;
+        rainSystem.Stop();
+        snowSystem.Stop();
+	}
+	
+	// Update is called once per frame
+	void Update ()
+    {
+        WeatherTimer();
+        WeatherChange();
+        WaterRise();
+	}
+    
+
+    //Controls the amount of time that weather stage is active
+    void WeatherTimer()
+    {
+        //collect data from the other script
+        if(weatherDuration <= 0)
+        {
+            soilMoisture = data.soilMoisture;
+            temp = data.temp;
+            weatherDuration = data.dataChange;
+            weatherCreate = true;
+        }
+        else
+        {
+            weatherDuration-= 1 * Time.deltaTime;
+        }
+    }
+
+    void WeatherChange()
+    {
+        if (weatherCreate == true)
+        {
+            //depending on the temp, let it snow! 
+            if (temp <= 3)
+            {
+                snowSystem.Play();
+            }
+            else
+            {
+                snowSystem.Stop();
+            }
+
+            //Rain and raise water level if soil moisture is high
+            if (soilMoisture >= 7)
+            {
+                rainSystem.Play();  //turn on rain
+                waterRising = true;
+                RenderSettings.skybox = RainySky;
+            }
+            else
+            {
+                rainSystem.Stop();
+                waterRising = false;
+                RenderSettings.skybox = SunnySky;
+            }
+            weatherCreate = false;
+        }
+
+        /*
+        switch(weatherNumber)
+        {
+            case 1:
+                weatherNumber = 1;
+                break;
+            case 2:
+                weatherNumber = 2;
+                break;
+            case 3:
+                weatherNumber = 3;
+                break;
+         }
+
+        if (weatherCreate == true)
+        {
+            if (weatherNumber == 1) //Sunny
+            {
+                rainSystem.Stop();  //turn off weather
+                snowSystem.Stop();
+                waterRising = false;
+
+                RenderSettings.skybox = SunnySky;
+                weatherCreate = false;
+            }
+
+
+            else if (weatherNumber == 2) //Rain
+            {
+                snowSystem.Stop();
+                rainSystem.Play();  //turn on rain
+                waterRising = true;
+                //Skybox.GetComponent<Renderer>().material = RainySky;
+                RenderSettings.skybox = RainySky;
+                weatherCreate = false;
+            }
+
+
+            else if (weatherNumber == 3) //Snow
+            {
+                rainSystem.Stop(); //turn off rain
+                snowSystem.Play();
+                waterRising = false;
+                //turn on snow
+                RenderSettings.skybox = SunnySky;
+                weatherCreate = false;
+            }
+        }
+        */
+    }
+
+    //stop the water raising too high or going too low
+    void WaterRise()
+    {
+        if (waterRising == true && water.transform.position.y <= -37)
+        {
+            water.transform.Translate(Vector3.up * 0.1f);
+        }
+        if (waterRising == false && water.transform.position.y >= -65)
+        {
+            water.transform.Translate(Vector3.up * -0.1f);
+        }
+
+    }
+}
