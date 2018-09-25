@@ -1,3 +1,7 @@
+//This script was created for our 3rd year professional project using Unity.
+//The purpose for this code was to change aspects of the game world depending on data collected from
+//a web server.
+
 using UnityEngine;
 using System.Collections;
 

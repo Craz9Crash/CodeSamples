@@ -1,3 +1,5 @@
+//This was the client code for my 4 player pong game created in order to learn more about networking with Winsock
+
 #define _CRT_SECURE_NO_WARNINGS 1
 
 #include "Networking.h"

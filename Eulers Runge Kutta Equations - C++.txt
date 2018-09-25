@@ -1,3 +1,5 @@
+//This code was created in order to solve Runge Kutta Equations
+
 #include <math.h>
 #include <iostream>
 #include <fstream>

@@ -1,3 +1,5 @@
+//this was the Server code from my 4 player pong game
+
 #include <stdio.h>
 #include <iostream>
 #include <stdlib.h>
@@ -76,7 +78,7 @@ int main()
 {
 	printf("Pong Server\n");
 
-	// Initialise the WinSock library -- we want version 2.2.
+	// Initialise the WinSock library
 	WSADATA w;
 	int error = WSAStartup(0x0202, &w);
 	if (error != 0)
